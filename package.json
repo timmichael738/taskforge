@@ -1,0 +1,63 @@
+{
+  "name": "taskforge",
+  "version": "1.0.0",
+  "description": "A reliable Postgres-backed job queue for Node.js: SKIP LOCKED workers, retries with jittered backoff, dead-letter queue, cron scheduling and a live dashboard.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Michael Timothy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/timmichael738/taskforge.git"
+  },
+  "keywords": [
+    "job-queue",
+    "background-jobs",
+    "postgres",
+    "skip-locked",
+    "worker",
+    "cron",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "migrations",
+    "public"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "demo": "tsx examples/demo.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "eslint": "^10.15.0",
+    "prettier": "^3.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^4.1.12"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.12",
+    "cron-parser": "^5.10.6",
+    "fastify": "^5.12.8",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  }
+}
