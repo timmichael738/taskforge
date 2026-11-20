@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: taskforge
+      POSTGRES_PASSWORD: taskforge
+      POSTGRES_DB: taskforge
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U taskforge']
+      interval: 5s
+
+  demo:
+    build: .
+    environment:
+      DATABASE_URL: postgres://taskforge:taskforge@postgres:5432/taskforge
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
