@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Taskforge Dashboard</title>
+    <style>
+      :root {
+        --bg: #f7f7f8;
+        --panel: #ffffff;
+        --text: #18181b;
+        --muted: #71717a;
+        --border: #e4e4e7;
+        --accent: #4f46e5;
+        --pending: #d97706;
+        --running: #2563eb;
+        --completed: #16a34a;
+        --dead: #dc2626;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f0f12;
+          --panel: #18181b;
+          --text: #f4f4f5;
+          --muted: #a1a1aa;
+          --border: #27272a;
+          --accent: #818cf8;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font:
+          14px/1.5 system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+      }
+      header h1 {
+        margin: 0;
+        font-size: 18px;
+      }
+      header small {
+        color: var(--muted);
+      }
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px 16px;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+      }
+      .stat {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 16px;
+        cursor: pointer;
+        text-align: left;
+        color: inherit;
+        font: inherit;
+      }
+      .stat[aria-pressed='true'] {
+        outline: 2px solid var(--accent);
+      }
+      .stat .label {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .stat .value {
+        font-size: 28px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat.pending .value {
+        color: var(--pending);
+      }
+      .stat.running .value {
+        color: var(--running);
+      }
+      .stat.completed .value {
+        color: var(--completed);
+      }
+      .stat.dead .value {
+        color: var(--dead);
+      }
+      .table-wrap {
+        margin-top: 24px;
+        overflow-x: auto;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 10px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      th {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      td.error {
+        white-space: normal;
+        color: var(--dead);
+        max-width: 360px;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+      }
+      .badge {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #fff;
+      }
+      .badge.pending {
+        background: var(--pending);
+      }
+      .badge.running {
+        background: var(--running);
+      }
+      .badge.completed {
+        background: var(--completed);
+      }
+      .badge.dead {
+        background: var(--dead);
+      }
+      button.action {
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text);
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      button.action:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .empty {
+        padding: 32px;
+        text-align: center;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>⚒️ Taskforge</h1>
+      <small id="updated">Loading…</small>
+    </header>
+    <main>
+      <section class="stats" id="stats" aria-label="Job counts by status"></section>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Queue</th>
+              <th>Job</th>
+              <th>Status</th>
+              <th>Attempts</th>
+              <th>Priority</th>
+              <th>Updated</th>
+              <th>Last error</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="jobs"></tbody>
+        </table>
+      </div>
+    </main>
+    <script>
+      const STATUSES = ['pending', 'running', 'completed', 'dead'];
+      let filter = null;
+
+      const el = (tag, props = {}, ...children) => {
+        const node = Object.assign(document.createElement(tag), props);
+        node.append(...children);
+        return node;
+      };
+
+      async function api(path, init) {
+        const res = await fetch(path, init);
+        if (!res.ok && res.status !== 204) throw new Error(`${res.status} ${res.statusText}`);
+        return res.status === 204 ? null : res.json();
+      }
+
+      async function refresh() {
+        const query = filter ? `?status=${filter}` : '';
+        const [{ queues }, { jobs }] = await Promise.all([
+          api('/api/stats'),
+          api(`/api/jobs${query}`),
+        ]);
+
+        const totals = Object.fromEntries(
+          STATUSES.map((s) => [s, queues.reduce((n, q) => n + q[s], 0)]),
+        );
+        document.getElementById('stats').replaceChildren(
+          ...STATUSES.map((status) =>
+            el(
+              'button',
+              {
+                className: `stat ${status}`,
+                ariaPressed: String(filter === status),
+                onclick: () => {
+                  filter = filter === status ? null : status;
+                  refresh();
+                },
+              },
+              el('div', { className: 'label', textContent: status }),
+              el('div', { className: 'value', textContent: totals[status].toLocaleString() }),
+            ),
+          ),
+        );
+
+        const rows = jobs.map((job) =>
+          el(
+            'tr',
+            {},
+            el('td', { textContent: job.id }),
+            el('td', { textContent: job.queue }),
+            el('td', { textContent: job.name }),
+            el('td', {}, el('span', { className: `badge ${job.status}`, textContent: job.status })),
+            el('td', { textContent: `${job.attempts}/${job.maxAttempts}` }),
+            el('td', { textContent: job.priority }),
+            el('td', { textContent: new Date(job.updatedAt).toLocaleTimeString() }),
+            el('td', { className: 'error', textContent: job.lastError ?? '' }),
+            el(
+              'td',
+              {},
+              job.status === 'dead'
+                ? el('button', {
+                    className: 'action',
+                    textContent: 'Retry',
+                    onclick: () =>
+                      api(`/api/jobs/${job.id}/retry`, { method: 'POST' }).then(refresh),
+                  })
+                : '',
+            ),
+          ),
+        );
+        document
+          .getElementById('jobs')
+          .replaceChildren(
+            ...(rows.length
+              ? rows
+              : [
+                  el(
+                    'tr',
+                    {},
+                    el('td', { colSpan: 9, className: 'empty', textContent: 'No jobs' }),
+                  ),
+                ]),
+          );
+        document.getElementById('updated').textContent =
+          `Updated ${new Date().toLocaleTimeString()}`;
+      }
+
+      refresh();
+      setInterval(() => refresh().catch(console.error), 2000);
+    </script>
+  </body>
+</html>
